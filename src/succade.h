@@ -160,9 +160,17 @@ struct succade_prefs
 	unsigned char version : 1; // Show version and exit?
 };
 
+struct real_block {
+	char  *label;
+	char  *prefix;
+	char  *suffix;
+};
+
+typedef struct real_block block_t;
+
 struct succade_state
 {
-        prefs_s  prefs;          // Preferences (options/config)
+    prefs_s  prefs;          // Preferences (options/config)
 	thing_s  lemon;
 	thing_s  albedo;         // Dummy block for the default configuration
 	thing_s *blocks;         // Reference to block array
@@ -171,6 +179,7 @@ struct succade_state
 	size_t   num_sparks;     // Number of sparks in sparks array
 	kita_state_s *kita;
 	unsigned char due : 1;
+	block_t *real_blocks;
 };
 
 typedef void (*create_block_callback)(const char *name, int align, void *data);

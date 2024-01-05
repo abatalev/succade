@@ -12,6 +12,7 @@
 #include "options.c"   // Command line args/options parsing
 #include "helpers.c"   // Helper functions, mostly for strings
 #include "loadini.c"   // Handles loading/processing of INI cfg file
+#include "unicode.h"
 
 static volatile int running;   // used to stop main loop 
 static volatile int handled;   // last signal that has been handled 
@@ -377,7 +378,7 @@ char* resultstr(const thing_s *block, int *len, size_t *diff)
  * of this block's script output, ready to be fed to Lemonbar, including prefix,
  * label and suffix. Returns the number of characters written to buf.
  */
-int blockstr(const thing_s *lemon, const thing_s *block, char *buf, size_t len)
+int blockstr(const thing_s *lemon, const thing_s *block, char *buf, size_t len, const block_t *real_block)
 {
 	// for convenience
 	const cfg_s *bcfg = &block->cfg;
@@ -445,10 +446,6 @@ int blockstr(const thing_s *lemon, const thing_s *block, char *buf, size_t len)
 	char label_font_idx = cfg_get_str(lcfg, LEMON_OPT_LABEL_FONT) ? (++font_count) + '0' : '-'; // 2nd slot
 	char affix_font_idx = cfg_get_str(lcfg, LEMON_OPT_AFFIX_FONT) ? (++font_count) + '0' : '-'; // 3rd slot
 
-	const char *prefix   = strsel(cfg_get_str(bcfg, BLOCK_OPT_PREFIX), "", "");
-	const char *suffix   = strsel(cfg_get_str(bcfg, BLOCK_OPT_SUFFIX), "", "");
-	const char *label    = strsel(cfg_get_str(bcfg, BLOCK_OPT_LABEL),  "", "");
-
 	int padding_l = cfg_get_int(bcfg, BLOCK_OPT_PADDING_LEFT);
 	int padding_r = cfg_get_int(bcfg, BLOCK_OPT_PADDING_RIGHT);
 	int margin_l  = cfg_get_int(bcfg, BLOCK_OPT_MARGIN_LEFT);
@@ -489,13 +486,13 @@ int blockstr(const thing_s *lemon, const thing_s *block, char *buf, size_t len)
 		// format start       
 		block_fg, block_bg, lc, (ol ? '+' : '-'), (ul ? '+' : '-'),
 		// prefix
-		affix_font_idx, affix_fg, affix_bg, prefix,
+		affix_font_idx, affix_fg, affix_bg, real_block->prefix,
 		// label
-		label_font_idx, label_fg, label_bg, label,
+		label_font_idx, label_fg, label_bg, real_block->label,
 		// block
 		block_font_idx, block_fg, block_bg, padding_l, "", min_width, result, padding_r, "",
 		// suffix
-		affix_font_idx, affix_fg, affix_bg, suffix,
+		affix_font_idx, affix_fg, affix_bg, real_block->suffix,
 		// action end
 		action_end,
 		// margin right
@@ -545,10 +542,10 @@ static char *barstr(const state_s *state)
 	int last_align = -1;
 
 	char block_str[BUFFER_BLOCK_STR];
-	const thing_s *block = NULL;
 	for (size_t i = 0; i < num_blocks; ++i)
 	{
-		block = &state->blocks[i];
+		const thing_s* block = &state->blocks[i];
+		const block_t* real_block = &state->real_blocks[i];
 
 		// Live blocks might not have a result available
 		if (block->output == NULL)
@@ -561,7 +558,7 @@ static char *barstr(const state_s *state)
 		int same_align = block_align == last_align;
 
 		// Build the block string
-		int block_str_len = blockstr(&state->lemon, block, block_str, BUFFER_BLOCK_STR);
+		int block_str_len = blockstr(&state->lemon, block, block_str, BUFFER_BLOCK_STR, real_block); 
 
 		// Potentially change the alignment
 		if (!same_align)
@@ -1177,6 +1174,13 @@ static void cleanup(state_s *state)
 
 	// misc
 	state->due = 0;
+
+	for(int i=0;i< state->num_blocks; i++){
+		free(state->real_blocks[i].label);
+		free(state->real_blocks[i].prefix);
+		free(state->real_blocks[i].suffix);
+	}
+	free(state->real_blocks);
 }
 
 // http://courses.cms.caltech.edu/cs11/material/general/usage.html
@@ -1423,7 +1427,18 @@ int main(int argc, char **argv)
 
 	create_sparks(&state);
 	open_sparks(&state);
-	
+
+	state.real_blocks = malloc(sizeof(block_t)*state.num_blocks);
+	for (size_t i = 0; i < state.num_blocks; ++i)
+	{
+		const thing_s* block = &state.blocks[i];
+		const cfg_s* bcfg = &block->cfg;
+		block_t* real_block = &state.real_blocks[i];
+		real_block->label = parse_unicode(cfg_get_str(bcfg, BLOCK_OPT_LABEL));
+		real_block->prefix = parse_unicode(cfg_get_str(bcfg, BLOCK_OPT_PREFIX));
+		real_block->suffix = parse_unicode(cfg_get_str(bcfg, BLOCK_OPT_SUFFIX));
+	}
+
 	//
 	// MAIN LOOP
 	//

@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-gcc -Wall -O3 -o bin/succade src/ini.c src/succade.c
+gcc -Wall -O3 -o bin/succade src/unicode.c src/ini.c src/succade.c
